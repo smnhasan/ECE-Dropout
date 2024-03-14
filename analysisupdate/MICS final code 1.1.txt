@@ -1,0 +1,137 @@
+
+clear
+*directory
+cd "F:\Works\Jamal Sir project\stata file"
+
+******************************************************************************** 
+*DATA MERGE 
+********************************************************************************
+
+use "wm" , clear
+sort HH1 HH2 LN
+save "wm" , replace
+
+use "bh" , clear
+sort HH1 HH2 LN
+save "bh" , replace
+
+use "hh" , clear
+sort HH1 HH2
+save "hh" , replace
+
+use "ch" , clear
+sort HH1 HH2 LN
+save "ch" , replace
+
+merge using wm.dta
+tab _merge
+keep if _merge == 3
+save "ch" , replace
+drop _merge
+
+merge using hh.dta
+tab _merge
+keep if _merge == 3
+save "ch" , replace
+drop _merge
+
+merge using bh.dta
+tab _merge
+keep if _merge == 3
+save "ch" , replace
+drop _merge
+
+
+********************************************************************************
+*WEIGHT, STRATA, CLUSTER VARIABLE FOR THE APPENDED DATA
+********************************************************************************
+gen wgt=chweight
+svyset [pw=wgt],psu(HH1) strata(stratum)
+
+
+********************************************************************************
+*Inclusion and Exclusion
+********************************************************************************
+*keep only 3 and 4 years of children (exclude children under 3 years)
+keep if UB2>=3
+svy: tab UB2
+
+
+
+##ECEP1 creation
+*Early Childhood Education Program.
+
+svy: tab UB6
+gen ECEP1=UB6
+recode ECEP1 1=1
+recode ECEP1 2=0
+recode ECEP1 9=.
+label define ECEP1 1 "Yes" 0 "No"
+label values ECEP ECEP1
+tab ECEP1
+
+
+tab HAZ2
+recode HAZ2 99.97 = .
+recode HAZ2 99.98 = .
+recode HAZ2 99.99 = .
+tab HAZ2
+generate Stunned1   = .
+replace  Stunned1   = 1 if (HAZ2 <= -2) 
+replace  Stunned1  = 0 if (HAZ2 > -2) & (HAZ2 <.) 
+label define Stunned1 1 "Yes" 0 "No"
+label values Stunned Stunned1
+tab Stunned1
+
+************************************************
+Crosstab
+************************************************
+
+##ECEP*underweight1
+
+tab WAZ2
+recode WAZ2 99.97 = .
+recode WAZ2 99.98 = .
+recode WAZ2 99.99 = .
+tab WAZ2
+generate underweight1    = .
+replace  underweight1    = 1 if (WAZ2 <= -2) 
+replace  underweight1   = 2 if (WAZ2 > -2) & (WAZ2 <.) 
+label define underweight1 1 "Yes" 2 "No"
+label values underweight underweight1
+svy: tab underweight
+tab underweight ECEP1, row
+svy: tab underweight ECEP1, row
+
+
+
+##Height for Age Stunned.
+tab HAZ2
+recode HAZ2 99.97 = .
+recode HAZ2 99.98 = .
+recode HAZ2 99.99 = .
+tab HAZ2
+generate Stunned1    = .
+replace  Stunned1    = 1 if (HAZ2 <= -2) 
+replace  Stunned1    = 0 if (HAZ2 > -2) & (HAZ2 <.) 
+label define Stunned1 1 "Yes" 0 "No"
+label values Stunned Stunned1
+svy: tab Stunned1
+tab Stunned1 ECEP1, row
+svy: tab Stunned1 ECEP1, row
+
+*Wealth index Status.
+svy: tab windex5
+recode windex5 0=.
+recode windex5 2 = 1
+recode windex5 4 = 3
+tab windex5 ECEP1, row
+svy: tab windex5 ECEP1, row
+
+
+************************************
+Logistic Regression
+*************************************
+
+svy: logit ECEP1 i.underweight1, or
+svy: logit ECEP1 ib2.Stunned1, or
